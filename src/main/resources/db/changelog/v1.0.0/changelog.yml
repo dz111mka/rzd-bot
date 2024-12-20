@@ -1,0 +1,7 @@
+databaseChangeLog:
+  - include:
+      file: 01.create_station_info.sql
+      relativeToChangelogFile: true
+  - include:
+      file: 02.create_job_of_check.sql
+      relativeToChangelogFile: true

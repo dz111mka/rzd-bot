@@ -1,0 +1,24 @@
+bot:
+  name: ***
+  token: ***
+
+spring:
+  application:
+    name: rzdbot
+  datasource:
+    url: ***
+    username: ***
+    password: ***
+    hikari:
+      schema: rzd
+      connection-init-sql: CREATE SCHEMA IF NOT EXISTS ${spring.datasource.hikari.schema}
+  jpa:
+    show-sql: true
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        format_sql: true
+  liquibase:
+    enabled: true
+    change-log: classpath:/db/changelog/changelog-master.yml
