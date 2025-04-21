@@ -88,9 +88,6 @@ public class TelegramBot extends TelegramLongPollingBot {
                     for (ru.chepikov.model.DescriptionCarrier descriptionCarrier : carrierList) {
                         sendMessage(chatId, descriptionCarrier.toString());
                     }
-                    /*sendMessage(chatId, DescriptionCarrier.reservedSeat);
-                    sendMessage(chatId, DescriptionCarrier.compartment);
-                    sendMessage(chatId, DescriptionCarrier.luxury);*/
                 }
                 default -> handleUserInput(chatId, messageText);
             }
@@ -141,7 +138,7 @@ public class TelegramBot extends TelegramLongPollingBot {
         newJob.setUserId((int) chatId);
         newJob.setHashcode(0);
 
-        jobOfCheckRepository.save(newJob);
+        jobOfCheckService.save(newJob);
 
         sendMessage(chatId, "Маршрут добавлен для отслеживания!");
 
@@ -193,7 +190,7 @@ public class TelegramBot extends TelegramLongPollingBot {
                 List<InlineKeyboardButton> rowInLine = new ArrayList<>();
                 InlineKeyboardButton removeButton = new InlineKeyboardButton();
                 removeButton.setText("Удалить " + jobOfCheck.getDepartureDate().toString() + "\nИз: " + jobOfCheck.getOriginStation() + "\nВ: " + jobOfCheck.getDestinationStation());
-                removeButton.setCallbackData("REMOVE_JOB:" + jobOfCheck.getId()); // Добавляем ID задания
+                removeButton.setCallbackData("REMOVE_JOB:" + jobOfCheck.getId());
                 rowInLine.add(removeButton);
                 rowsInLine.add(rowInLine);
             }
