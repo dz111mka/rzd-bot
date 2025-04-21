@@ -1,14 +1,14 @@
 bot:
-  name: ***
-  token: ***
+  name: rzd_check_seat_bot
+  token: 7481028349:AAFWxgSy2YAivxSC8HXof4aSuG0rn8PEwVc
 
 spring:
   application:
     name: rzdbot
   datasource:
-    url: ***
-    username: ***
-    password: ***
+    url: jdbc:postgresql://localhost:5433/postgres
+    username: postgres
+    password: mysecretpassword
     hikari:
       schema: rzd
       connection-init-sql: CREATE SCHEMA IF NOT EXISTS ${spring.datasource.hikari.schema}

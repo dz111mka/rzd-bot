@@ -16,9 +16,21 @@ import java.util.List;
 @FieldDefaults(makeFinal = true, level = AccessLevel.PRIVATE)
 public class JobOfCheckService {
 
-    JobOfCheckRepository repository;
+    private JobOfCheckRepository repository;
 
-    List<JobOfCheck> findAllJobs() {
+    public List<JobOfCheck> findAllJobs() {
         return repository.findAll();
     }
+
+    public List<JobOfCheck> findByUserId(long userId) {
+        return repository.findByUserId(userId);
+    }
+
+    public JobOfCheck save(JobOfCheck job) {
+        return repository.save(job);
+    }
+
+
+
+
 }

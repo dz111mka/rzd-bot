@@ -16,12 +16,10 @@ import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMa
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 import ru.chepikov.config.BotConfig;
-import ru.chepikov.exception.StationNotFoundException;
 import ru.chepikov.model.JobOfCheck;
 import ru.chepikov.model.StationInfo;
 import ru.chepikov.model.dto.RouteDto;
 import ru.chepikov.repository.JobOfCheckRepository;
-import ru.chepikov.repository.StationInfoRepository;
 import ru.chepikov.util.DescriptionCarrier;
 
 import java.time.LocalDate;
@@ -36,9 +34,11 @@ public class TelegramBot extends TelegramLongPollingBot {
 
     private final RZDService rzdService;
 
-    private final StationInfoRepository stationInfoRepository;
+    private final StationInfoService stationInfoService;
 
     private final JobOfCheckRepository jobOfCheckRepository;
+
+    private final JobOfCheckService jobOfCheckService;
 
     private final ObjectMapper objectMapper;
 
@@ -46,11 +46,12 @@ public class TelegramBot extends TelegramLongPollingBot {
 
     private Map<Long, JobOfCheck> userJobOfCheck = new HashMap<>();
 
-    public TelegramBot(BotConfig config, RZDService rzdService, StationInfoRepository stationInfoRepository, JobOfCheckRepository jobOfCheckRepository, ObjectMapper objectMapper) {
+    public TelegramBot(BotConfig config, RZDService rzdService, StationInfoService stationInfoService, JobOfCheckRepository jobOfCheckRepository, JobOfCheckService jobOfCheckService, ObjectMapper objectMapper) {
         this.config = config;
         this.rzdService = rzdService;
-        this.stationInfoRepository = stationInfoRepository;
+        this.stationInfoService = stationInfoService;
         this.jobOfCheckRepository = jobOfCheckRepository;
+        this.jobOfCheckService = jobOfCheckService;
         this.objectMapper = objectMapper;
         List<BotCommand> listOfCommands = new ArrayList<>();
         listOfCommands.add(new BotCommand("/start", "Начальное сообщение"));
@@ -78,7 +79,7 @@ public class TelegramBot extends TelegramLongPollingBot {
                     sendMessage(chatId, "Введите дату в формате YYYY-MM-DD (например, 2024-12-30):");
                     userStates.put(chatId, "WAITING_FOR_DATE");
                 }
-                case "/about_carrier"  -> {
+                case "/about_carrier" -> {
                     sendMessage(chatId, DescriptionCarrier.reservedSeat);
                     sendMessage(chatId, DescriptionCarrier.compartment);
                     sendMessage(chatId, DescriptionCarrier.luxury);
@@ -204,33 +205,23 @@ public class TelegramBot extends TelegramLongPollingBot {
         SendMessage message = new SendMessage();
         List<JobOfCheck> list = jobOfCheckRepository.findAll();
         for (JobOfCheck job : list) {
-            Optional<StationInfo> originStationOptional = stationInfoRepository.findByName(job.getOriginStation());
-            Optional<StationInfo> destinationStationOptional = stationInfoRepository.findByName(job.getDestinationStation());
+            StationInfo originalStationInfo = stationInfoService.findStationInfo(job.getOriginStation());
+            StationInfo destinationStationInfo = stationInfoService.findStationInfo(job.getDestinationStation());
 
-            if (originStationOptional.isPresent() && destinationStationOptional.isPresent()) {
-                Integer originalCode = originStationOptional.get().getId();
-                Integer destinationCode = destinationStationOptional.get().getId();
-                LocalDate departureDate = job.getDepartureDate();
+            Integer originalCode = originalStationInfo.getId();
+            Integer destinationCode = destinationStationInfo.getId();
+            LocalDate departureDate = job.getDepartureDate();
 
-                String string = rzdService.fetchTrainPrices(originalCode, destinationCode, departureDate);
-                RouteDto routeDto = objectMapper.readValue(string, RouteDto.class);
-                routeDto.setDate(job.getDepartureDate());
+            String string = rzdService.fetchTrainPrices(originalCode, destinationCode, departureDate);
+            RouteDto routeDto = objectMapper.readValue(string, RouteDto.class);
+            routeDto.setDate(job.getDepartureDate());
 
-                if (job.getHashcode() != routeDto.hashCode()) {
-                    sendMessage(job.getUserId(), routeDto.toString());
-                    job.setHashcode(routeDto.hashCode());
-                    jobOfCheckRepository.save(job);
-                }
-            } else {
-                String originStationName = job.getOriginStation();
-                String destinationStationName = job.getDestinationStation();
-                String errorMessage = String.format("Station not found: %s, %s",
-                        originStationOptional.isPresent() ? "" : originStationName,
-                        destinationStationOptional.isPresent() ? "" : destinationStationName);
-
-                log.error(errorMessage);
-                throw new StationNotFoundException(errorMessage);
+            if (job.getHashcode() != routeDto.hashCode()) {
+                sendMessage(job.getUserId(), routeDto.toString());
+                job.setHashcode(routeDto.hashCode());
+                jobOfCheckService.save(job);
             }
         }
     }
 }
+
