@@ -19,7 +19,6 @@ import ru.chepikov.config.BotConfig;
 import ru.chepikov.model.JobOfCheck;
 import ru.chepikov.model.StationInfo;
 import ru.chepikov.model.dto.RouteDto;
-import ru.chepikov.repository.JobOfCheckRepository;
 
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
@@ -36,26 +35,27 @@ public class TelegramBot extends TelegramLongPollingBot {
 
     private final StationInfoService stationInfoService;
 
-    private final JobOfCheckRepository jobOfCheckRepository;
-
     private final JobOfCheckService jobOfCheckService;
 
     private final ObjectMapper objectMapper;
 
     private final DescriptionCarrierService descriptionCarrierService;
 
+    //private final StateMachineFactory<BotStates, BotEvents> stateMachineFactory;
+    //private final Map<Long, StateMachine<BotStates, BotEvents>> stateMachines = new ConcurrentHashMap<>();
+
     private Map<Long, String> userStates = new HashMap<>();
 
     private Map<Long, JobOfCheck> userJobOfCheck = new HashMap<>();
 
-    public TelegramBot(BotConfig config, RZDService rzdService, StationInfoService stationInfoService, JobOfCheckRepository jobOfCheckRepository, JobOfCheckService jobOfCheckService, ObjectMapper objectMapper, DescriptionCarrierService descriptionCarrierService) {
+    public TelegramBot(BotConfig config, RZDService rzdService, StationInfoService stationInfoService, JobOfCheckService jobOfCheckService, ObjectMapper objectMapper, DescriptionCarrierService descriptionCarrierService/*, StateMachineFactory<BotStates, BotEvents> stateMachineFactory*/) {
         this.config = config;
         this.rzdService = rzdService;
         this.stationInfoService = stationInfoService;
-        this.jobOfCheckRepository = jobOfCheckRepository;
         this.jobOfCheckService = jobOfCheckService;
         this.objectMapper = objectMapper;
         this.descriptionCarrierService = descriptionCarrierService;
+        //this.stateMachineFactory = stateMachineFactory;
         List<BotCommand> listOfCommands = new ArrayList<>();
         listOfCommands.add(new BotCommand("/start", "Начальное сообщение"));
         listOfCommands.add(new BotCommand("/check", "Начать отслеживать"));
@@ -147,7 +147,7 @@ public class TelegramBot extends TelegramLongPollingBot {
     }
 
     private void removeJob(long chatId, UUID jobId) {
-        jobOfCheckRepository.deleteById(jobId);
+        jobOfCheckService.deleteById(jobId);
         uncheckRoute(chatId);
     }
 
@@ -175,7 +175,7 @@ public class TelegramBot extends TelegramLongPollingBot {
 
 
     private void uncheckRoute(long chatId) {
-        List<JobOfCheck> jobOfCheckList = jobOfCheckRepository.findByUserId(chatId);
+        List<JobOfCheck> jobOfCheckList = jobOfCheckService.findByUserId(chatId);
         SendMessage message = new SendMessage();
         message.setText("Что Вы хотите перестать отслеживать изменить");
         message.setChatId(chatId);
@@ -207,7 +207,7 @@ public class TelegramBot extends TelegramLongPollingBot {
 
     @Scheduled(cron = "0 * * * * *")
     public void jobToCheckRequests() throws JsonProcessingException {
-        List<JobOfCheck> list = jobOfCheckRepository.findAll();
+        List<JobOfCheck> list = jobOfCheckService.findAllJobs();
         for (JobOfCheck job : list) {
             StationInfo originalStationInfo = stationInfoService.findStationInfo(job.getOriginStation());
             StationInfo destinationStationInfo = stationInfoService.findStationInfo(job.getDestinationStation());

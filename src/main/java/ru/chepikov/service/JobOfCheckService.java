@@ -9,6 +9,7 @@ import ru.chepikov.model.JobOfCheck;
 import ru.chepikov.repository.JobOfCheckRepository;
 
 import java.util.List;
+import java.util.UUID;
 
 @Slf4j
 @Service
@@ -28,6 +29,10 @@ public class JobOfCheckService {
 
     public JobOfCheck save(JobOfCheck job) {
         return repository.save(job);
+    }
+
+    public void deleteById(UUID id) {
+        repository.deleteById(id);
     }
 
 
