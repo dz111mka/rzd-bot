@@ -1,8 +1,6 @@
 package ru.chepikov.config;
 
-import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
-import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.ContextRefreshedEvent;
 import org.springframework.context.event.EventListener;
@@ -15,10 +13,9 @@ import ru.chepikov.service.TelegramBot;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-@FieldDefaults(makeFinal = true, level = AccessLevel.PRIVATE)
 public class BotInitializer {
 
-    TelegramBot bot;
+    private final TelegramBot bot;
 
     @EventListener({    ContextRefreshedEvent.class})
     public void init() throws TelegramApiException {
