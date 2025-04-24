@@ -14,10 +14,9 @@ import java.util.UUID;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-@FieldDefaults(makeFinal = true, level = AccessLevel.PRIVATE)
 public class JobOfCheckService {
 
-    private JobOfCheckRepository repository;
+    private final JobOfCheckRepository repository;
 
     public List<JobOfCheck> findAllJobs() {
         return repository.findAll();

@@ -10,11 +10,10 @@ import lombok.experimental.FieldDefaults;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-@FieldDefaults(level = AccessLevel.PRIVATE)
 public class StationInfo {
 
     @Id
-    Integer id;
+    private Integer id;
 
-    String name;
+    private String name;
 }

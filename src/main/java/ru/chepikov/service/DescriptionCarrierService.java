@@ -13,10 +13,9 @@ import java.util.List;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-@FieldDefaults(makeFinal = true, level = AccessLevel.PRIVATE)
 public class DescriptionCarrierService {
 
-    private DescriptionCarrierRepository repository;
+    private final DescriptionCarrierRepository repository;
 
     public List<DescriptionCarrier> findAll() {
         return repository.findAll();

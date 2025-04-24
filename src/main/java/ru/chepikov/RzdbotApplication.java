@@ -11,5 +11,4 @@ public class RzdbotApplication {
 	public static void main(String[] args) {
 		SpringApplication.run(RzdbotApplication.class, args);
 	}
-
 }

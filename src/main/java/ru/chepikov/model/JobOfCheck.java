@@ -12,26 +12,25 @@ import java.util.UUID;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-@FieldDefaults(level = AccessLevel.PRIVATE)
 public class JobOfCheck {
 
     @Id
     @GeneratedValue(strategy = GenerationType.AUTO)
     @Column(name = "id")
-    UUID id;
+    private UUID id;
 
     @Column(name = "user_id")
-    Integer userId;
+    private Integer userId;
 
     @Column(name = "origin_station")
-    String originStation;
+    private String originStation;
 
     @Column(name = "destination_station")
-    String destinationStation;
+    private String destinationStation;
 
     @Column(name = "departure_date")
-    LocalDate departureDate;
+    private LocalDate departureDate;
 
     @Column(name = "hashcode")
-    Integer hashcode;
+    private Integer hashcode;
 }

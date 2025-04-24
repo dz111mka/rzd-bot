@@ -10,15 +10,12 @@ import java.time.LocalDate;
 import java.util.Map;
 
 @Service
-@FieldDefaults(level = AccessLevel.PRIVATE)
 public class RZDService {
 
     @Autowired
-    RZDApiClient rzdApiClient;
+    private RZDApiClient rzdApiClient;
 
-    public String fetchTrainPrices(Integer origin,
-                                   Integer destination,
-                                   LocalDate departureDate) {
+    public String fetchTrainPrices(Integer origin, Integer destination, LocalDate departureDate) {
         return rzdApiClient.getPrices(origin, destination, departureDate);
     }
 }

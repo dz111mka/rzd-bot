@@ -12,16 +12,15 @@ import lombok.experimental.FieldDefaults;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-@FieldDefaults(level = AccessLevel.PRIVATE)
 @Table(name = "description_carrier")
 public class DescriptionCarrier {
 
     @Id
     @Column(name = "type", length = 30, nullable = false)
-    String type;
+    private String type;
 
     @Column(name = "description", nullable = false)
-    String description;
+    private String description;
 
     @Override
     public String toString() {
