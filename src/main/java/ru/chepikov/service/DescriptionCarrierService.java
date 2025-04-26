@@ -6,7 +6,6 @@ import org.springframework.stereotype.Service;
 import ru.chepikov.model.DescriptionCarrier;
 import ru.chepikov.repository.DescriptionCarrierRepository;
 
-import java.util.Collections;
 import java.util.List;
 
 @Slf4j
@@ -17,7 +16,6 @@ public class DescriptionCarrierService {
     private final DescriptionCarrierRepository repository;
 
     public List<DescriptionCarrier> findAll() {
-        List<DescriptionCarrier> all = repository.findAll();
-        return all;
+        return repository.findAll();
     }
 }
