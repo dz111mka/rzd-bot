@@ -31,8 +31,4 @@ public class JobOfCheckService {
     public void deleteById(UUID id) {
         repository.deleteById(id);
     }
-
-
-
-
 }

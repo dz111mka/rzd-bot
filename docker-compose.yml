@@ -1,0 +1,28 @@
+version: '3.8'
+
+volumes:
+  rzd:
+
+services:
+  postgres:
+    image: postgres:16
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: mysecretpassword
+      POSTGRES_DB: rzd
+    volumes:
+      - rzd:/var/lib/postgresql/data
+      # Для Liquibase миграций не нужно монтировать том, они встроены в приложение
+    ports:
+      - "5432:5432"
+  app:
+    restart: always
+    build: .
+    ports:
+      - "8080:8080"
+    depends_on:
+      - postgres
+    environment:
+      SPRING_DATASOURCE_URL: 'jdbc:postgresql://postgres:5432/postgres'
+      JAVA_OPTS: 'Xmx512m'
