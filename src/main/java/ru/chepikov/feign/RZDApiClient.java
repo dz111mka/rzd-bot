@@ -9,6 +9,7 @@ import ru.chepikov.config.FeignConfiguration;
 import java.time.LocalDate;
 
 @FeignClient(name = "rzd", url = "https://ticket.rzd.ru/api/v1/railway-service/prices/train-pricing", configuration = FeignConfiguration.class)
+
 public interface RZDApiClient {
 
     @GetMapping

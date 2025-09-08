@@ -1,16 +1,25 @@
 package ru.chepikov.state_machine;
 
 import org.springframework.context.annotation.Configuration;
-import org.springframework.statemachine.config.EnableStateMachine;
-import org.springframework.statemachine.config.EnumStateMachineConfigurerAdapter;
+import org.springframework.statemachine.config.EnableStateMachineFactory;
+import org.springframework.statemachine.config.StateMachineConfigurerAdapter;
+import org.springframework.statemachine.config.builders.StateMachineConfigurationConfigurer;
 import org.springframework.statemachine.config.builders.StateMachineStateConfigurer;
 import org.springframework.statemachine.config.builders.StateMachineTransitionConfigurer;
+import org.springframework.statemachine.listener.StateMachineListenerAdapter;
 
 import java.util.EnumSet;
 
 @Configuration
-@EnableStateMachine
-public class BotStateMachineConfig extends EnumStateMachineConfigurerAdapter<BotStates, BotEvents> {
+@EnableStateMachineFactory
+public class UserInputStateMachineConfig extends StateMachineConfigurerAdapter<BotStates, BotEvents> {
+
+    @Override
+    public void configure(StateMachineConfigurationConfigurer<BotStates, BotEvents> config) throws Exception {
+        config.withConfiguration()
+                .autoStartup(false)
+                .listener(new StateMachineListenerAdapter<BotStates, BotEvents>());
+    }
 
     @Override
     public void configure(StateMachineStateConfigurer<BotStates, BotEvents> states) throws Exception {

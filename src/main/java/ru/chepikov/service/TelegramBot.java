@@ -3,8 +3,11 @@ package ru.chepikov.service;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.bind.annotation.RestController;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import org.telegram.telegrambots.meta.api.methods.commands.SetMyCommands;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
@@ -27,6 +30,7 @@ import java.util.*;
 
 @Slf4j
 @Service
+@RestController
 public class TelegramBot extends TelegramLongPollingBot {
 
     private final BotConfig config;
@@ -132,13 +136,18 @@ public class TelegramBot extends TelegramLongPollingBot {
 
     private void saveJob(long chatId, JobOfCheck userInput) {
         JobOfCheck newJob = new JobOfCheck();
+
+        String originStation = userInput.getOriginStation();
+        String destinationStation = userInput.getDestinationStation();
+
         newJob.setDepartureDate(userInput.getDepartureDate());
-        newJob.setOriginStation(userInput.getOriginStation());
-        newJob.setDestinationStation(userInput.getDestinationStation());
+        newJob.setOriginStation(originStation);
+        newJob.setDestinationStation(destinationStation);
         newJob.setUserId((int) chatId);
         newJob.setHashcode(0);
 
         jobOfCheckService.save(newJob);
+        log.info("Добавлен новый маршрут для отслеживания для пользователя {} из {} в {}", chatId, originStation, destinationStation);
 
         sendMessage(chatId, "Маршрут добавлен для отслеживания!");
 
@@ -155,6 +164,7 @@ public class TelegramBot extends TelegramLongPollingBot {
         SendMessage message = new SendMessage();
         message.setChatId(chatId);
         message.setText(textToSend);
+        log.info("Отправлено сообщение пользователю {} с текстом: {}", chatId, textToSend);
 
         try {
             execute(message);
@@ -205,8 +215,10 @@ public class TelegramBot extends TelegramLongPollingBot {
         }
     }
 
-    @Scheduled(cron = "0 * * * * *")
+    @Async("scheduledChecking")
+    @Scheduled(cron = "*/5 * * * * *")
     public void jobToCheckRequests() throws JsonProcessingException {
+        log.info("Выполняется в потоке: {}", Thread.currentThread().getName());
         List<JobOfCheck> list = jobOfCheckService.findAllJobs();
         for (JobOfCheck job : list) {
             StationInfo originalStationInfo = stationInfoService.findStationInfo(job.getOriginStation());
@@ -226,6 +238,15 @@ public class TelegramBot extends TelegramLongPollingBot {
                 jobOfCheckService.save(job);
             }
         }
+    }
+
+    @Async("scheduledDeleting")
+    @Transactional
+    @Scheduled(cron = "0 0 2 * * ?")
+    public void jobToDeletingOldRequests() {
+        log.info("Выполняется в потоке: {}", Thread.currentThread().getName());
+        jobOfCheckService.deletedExpiredData();
+
     }
 }
 

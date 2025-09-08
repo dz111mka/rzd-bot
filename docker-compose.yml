@@ -1,8 +1,4 @@
-version: '3.8'
-
-volumes:
-  rzd:
-
+version: '3.7'
 services:
   postgres:
     image: postgres:16
@@ -13,16 +9,29 @@ services:
       POSTGRES_DB: rzd
     volumes:
       - rzd:/var/lib/postgresql/data
-      # Для Liquibase миграций не нужно монтировать том, они встроены в приложение
     ports:
       - "5432:5432"
-  app:
-    restart: always
+    healthcheck: # ← добавлен healthcheck
+      test: [ "CMD-SHELL", "pg_isready -U postgres -d rzd" ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+  rzd:
     build: .
     ports:
-      - "8080:8080"
-    depends_on:
-      - postgres
+      - 8080:8080
+      - 9010:9010
     environment:
-      SPRING_DATASOURCE_URL: 'jdbc:postgresql://postgres:5432/postgres'
-      JAVA_OPTS: 'Xmx512m'
+      SPRING_PROFILES_ACTIVE: dockercompose
+    depends_on:
+      postgres:
+        condition: service_healthy
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          cpus: '2'
+          memory: '256M'
+volumes:
+  rzd:
