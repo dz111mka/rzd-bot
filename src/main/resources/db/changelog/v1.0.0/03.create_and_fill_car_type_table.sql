@@ -1,7 +1,7 @@
 --liquibase formatted sql
 --changeset Dmitriy:3
 
-CREATE TABLE IF NOT EXISTS description_carrier (
+CREATE TABLE IF NOT EXISTS car_type (
     type                VARCHAR(30)     PRIMARY KEY,  -- Тип вагона
     description         TEXT            NOT NULL      -- Описание вагона
 );

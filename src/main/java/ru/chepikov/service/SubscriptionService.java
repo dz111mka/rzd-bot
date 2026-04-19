@@ -1,6 +1,8 @@
 package ru.chepikov.service;
 
+import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
+import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import ru.chepikov.model.TrainSubscription;
@@ -12,27 +14,28 @@ import java.util.UUID;
 @Slf4j
 @Service
 @RequiredArgsConstructor
+@FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class SubscriptionService {
 
-    private final TrainSubscriptionRepository repository;
+    TrainSubscriptionRepository trainSubscriptionRepository;
 
     public List<TrainSubscription> findAll() {
-        return repository.findAll();
+        return trainSubscriptionRepository.findAll();
     }
 
     public List<TrainSubscription> findByUserId(long userId) {
-        return repository.findByUserId(userId);
+        return trainSubscriptionRepository.findByUserId(userId);
     }
 
     public TrainSubscription save(TrainSubscription subscription) {
-        return repository.save(subscription);
+        return trainSubscriptionRepository.save(subscription);
     }
 
     public void deleteById(UUID id) {
-        repository.deleteById(id);
+        trainSubscriptionRepository.deleteById(id);
     }
 
     public void deleteExpiredData() {
-        repository.deleteExpiredData();
+        trainSubscriptionRepository.deleteExpiredData();
     }
 }

@@ -1,7 +1,7 @@
 --liquibase formatted sql
 --changeset Dmitriy:1
 
-CREATE TABLE IF NOT EXISTS station_info (
+CREATE TABLE IF NOT EXISTS station (
     id      int             PRIMARY KEY,
     name    VARCHAR(128)
 );
