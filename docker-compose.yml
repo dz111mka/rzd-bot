@@ -11,7 +11,7 @@ services:
       - rzd:/var/lib/postgresql/data
     ports:
       - "5432:5432"
-    healthcheck: # ← добавлен healthcheck
+    healthcheck:
       test: [ "CMD-SHELL", "pg_isready -U postgres -d rzd" ]
       interval: 5s
       timeout: 5s
@@ -33,5 +33,7 @@ services:
         limits:
           cpus: '2'
           memory: '256M'
+        reservations:
+          memory: '128M'
 volumes:
   rzd:

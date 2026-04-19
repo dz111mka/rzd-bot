@@ -45,9 +45,6 @@ public class TelegramBot extends TelegramLongPollingBot {
 
     private final DescriptionCarrierService descriptionCarrierService;
 
-    //private final StateMachineFactory<BotStates, BotEvents> stateMachineFactory;
-    //private final Map<Long, StateMachine<BotStates, BotEvents>> stateMachines = new ConcurrentHashMap<>();
-
     private Map<Long, String> userStates = new HashMap<>();
 
     private Map<Long, JobOfCheck> userJobOfCheck = new HashMap<>();
@@ -217,7 +214,7 @@ public class TelegramBot extends TelegramLongPollingBot {
 
     @Async("scheduledChecking")
     @Scheduled(cron = "*/5 * * * * *")
-    public void jobToCheckRequests() throws JsonProcessingException {
+    public void processTrainChecks() throws JsonProcessingException {
         log.info("Выполняется в потоке: {}", Thread.currentThread().getName());
         List<JobOfCheck> list = jobOfCheckService.findAllJobs();
         for (JobOfCheck job : list) {
