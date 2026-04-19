@@ -12,7 +12,7 @@ import lombok.Setter;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-public class StationInfo {
+public class Station {
 
     @Id
     private Integer id;

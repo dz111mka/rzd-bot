@@ -3,19 +3,19 @@ package ru.chepikov.service;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
-import ru.chepikov.model.DescriptionCarrier;
-import ru.chepikov.repository.DescriptionCarrierRepository;
+import ru.chepikov.model.CarType;
+import ru.chepikov.repository.CarTypeRepository;
 
 import java.util.List;
 
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class DescriptionCarrierService {
+public class CarTypeService {
 
-    private final DescriptionCarrierRepository repository;
+    private final CarTypeRepository repository;
 
-    public List<DescriptionCarrier> findAll() {
+    public List<CarType> findAll() {
         return repository.findAll();
     }
 }

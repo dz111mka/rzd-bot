@@ -14,7 +14,8 @@ import java.util.UUID;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-public class JobOfCheck {
+@Table(name = "train_subscription")
+public class TrainSubscription {
 
     @Id
     @GeneratedValue(strategy = GenerationType.AUTO)
@@ -33,6 +34,6 @@ public class JobOfCheck {
     @Column(name = "departure_date")
     private LocalDate departureDate;
 
-    @Column(name = "hashcode")
-    private Integer hashcode;
+    @Column(name = "content_hash")
+    private Integer contentHash;
 }
