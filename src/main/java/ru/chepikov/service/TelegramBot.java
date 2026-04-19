@@ -3,6 +3,11 @@ package ru.chepikov.service;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
+
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -45,6 +50,8 @@ public class TelegramBot extends TelegramLongPollingBot {
 
     private final DescriptionCarrierService descriptionCarrierService;
 
+    private final ExecutorService executorService = Executors.newFixedThreadPool(4);
+
     private Map<Long, String> userStates = new HashMap<>();
 
     private Map<Long, JobOfCheck> userJobOfCheck = new HashMap<>();
@@ -80,7 +87,7 @@ public class TelegramBot extends TelegramLongPollingBot {
                 case "/uncheck" -> uncheckRoute(chatId);
                 case "ЗДАРОВА ДАУН" -> sendMessage(chatId, "ЗДАРОВА ОЛЕГ");
                 case "/check" -> {
-                    sendMessage(chatId, "Введите дату в формате YYYY-MM-DD (например, " + LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE) +  "):");
+                    sendMessage(chatId, "Введите дату в формате YYYY-MM-DD (например, " + LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE) + "):");
                     userStates.put(chatId, "WAITING_FOR_DATE");
                 }
                 case "/about_carrier" -> {
@@ -213,27 +220,44 @@ public class TelegramBot extends TelegramLongPollingBot {
     }
 
     @Async("scheduledChecking")
-    @Scheduled(cron = "*/5 * * * * *")
+    @Scheduled(cron = "*/5 * * * *")
     public void processTrainChecks() throws JsonProcessingException {
         log.info("Выполняется в потоке: {}", Thread.currentThread().getName());
         List<JobOfCheck> list = jobOfCheckService.findAllJobs();
+
         for (JobOfCheck job : list) {
-            StationInfo originalStationInfo = stationInfoService.findStationInfo(job.getOriginStation());
-            StationInfo destinationStationInfo = stationInfoService.findStationInfo(job.getDestinationStation());
+            executorService.submit(() -> {
+                try {
+                    processJob(job);
+                } catch (Exception e) {
+                    log.error("Ошибка при обработке job {}: {}", job.getId(), e.getMessage());
+                }
+            });
+        }
+    }
 
-            Integer originalCode = originalStationInfo.getId();
-            Integer destinationCode = destinationStationInfo.getId();
-            LocalDate departureDate = job.getDepartureDate();
+    private void processJob(JobOfCheck job) throws JsonProcessingException {
+        StationInfo originalStationInfo = stationInfoService.findStationInfo(job.getOriginStation());
+        StationInfo destinationStationInfo = stationInfoService.findStationInfo(job.getDestinationStation());
 
-            String string = rzdService.fetchTrainPrices(originalCode, destinationCode, departureDate);
-            RouteDto routeDto = objectMapper.readValue(string, RouteDto.class);
-            routeDto.setDate(job.getDepartureDate());
+        if (originalStationInfo == null || destinationStationInfo == null) {
+            log.warn("Станция не найдена для job {}", job.getId());
+            return;
+        }
 
-            if (job.getHashcode() != routeDto.hashCode()) {
-                sendMessage(job.getUserId(), routeDto.toString());
-                job.setHashcode(routeDto.hashCode());
-                jobOfCheckService.save(job);
-            }
+        Integer originalCode = originalStationInfo.getId();
+        Integer destinationCode = destinationStationInfo.getId();
+        LocalDate departureDate = job.getDepartureDate();
+
+        String string = rzdService.fetchTrainPrices(originalCode, destinationCode, departureDate);
+        RouteDto routeDto = objectMapper.readValue(string, RouteDto.class);
+        routeDto.setDate(job.getDepartureDate());
+
+        int routeHash = routeDto.toString().hashCode();
+        if (!Objects.equals(job.getHashcode(), routeHash)) {
+            sendMessage(job.getUserId(), routeDto.toString());
+            job.setHashcode(routeHash);
+            jobOfCheckService.save(job);
         }
     }
 
