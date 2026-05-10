@@ -23,7 +23,7 @@ public class TrainSubscription {
     private UUID id;
 
     @Column(name = "user_id")
-    private Integer userId;
+    private Long userId;
 
     @Column(name = "origin_station")
     private String originStation;
