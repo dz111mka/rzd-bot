@@ -8,14 +8,14 @@ import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.meta.TelegramBotsApi;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 import org.telegram.telegrambots.updatesreceivers.DefaultBotSession;
-import ru.chepikov.service.TelegramBot;
+import ru.chepikov.service.RzdBot;
 
 @Slf4j
 @Component
 @RequiredArgsConstructor
 public class BotInitializer {
 
-    private final TelegramBot bot;
+    private final RzdBot bot;
 
     @EventListener({ContextRefreshedEvent.class})
     public void init() throws TelegramApiException {

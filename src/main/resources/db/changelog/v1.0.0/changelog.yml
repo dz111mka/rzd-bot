@@ -1,10 +1,10 @@
 databaseChangeLog:
   - include:
-      file: 01.create_station_info.sql
+      file: 01.create_station_table.sql
       relativeToChangelogFile: true
   - include:
-      file: 02.create_job_of_check.sql
+      file: 02.create_train_subscription_table.sql
       relativeToChangelogFile: true
   - include:
-      file: 03.create_and_fill_description_carrier.sql
+      file: 03.create_and_fill_car_type_table.sql
       relativeToChangelogFile: true

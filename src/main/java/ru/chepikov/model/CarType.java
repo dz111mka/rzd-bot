@@ -14,8 +14,8 @@ import lombok.Setter;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-@Table(name = "description_carrier")
-public class DescriptionCarrier {
+@Table(name = "car_type")
+public class CarType {
 
     @Id
     @Column(name = "type", length = 30, nullable = false)
@@ -29,5 +29,3 @@ public class DescriptionCarrier {
         return description;
     }
 }
-
-

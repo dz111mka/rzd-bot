@@ -1,7 +1,7 @@
 --liquibase formatted sql
 --changeset Dmitriy:2
 
-CREATE TABLE IF NOT EXISTS job_of_check (
+CREATE TABLE IF NOT EXISTS train_subscription (
     id                   UUID            PRIMARY KEY,       -- Идентификатор
     user_id              int             NOT NULL,          -- Идентификатор пользователя
     origin_station       VARCHAR(128)    NOT NULL,          -- Станция отправления

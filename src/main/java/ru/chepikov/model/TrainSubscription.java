@@ -14,7 +14,8 @@ import java.util.UUID;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-public class JobOfCheck {
+@Table(name = "train_subscription")
+public class TrainSubscription {
 
     @Id
     @GeneratedValue(strategy = GenerationType.AUTO)

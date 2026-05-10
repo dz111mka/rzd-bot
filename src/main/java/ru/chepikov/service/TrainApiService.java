@@ -8,11 +8,11 @@ import java.time.LocalDate;
 
 @Service
 @RequiredArgsConstructor
-public class RZDService {
+public class TrainApiService {
 
     private final RZDApiClient rzdApiClient;
 
-    public String fetchTrainPrices(Integer origin, Integer destination, LocalDate departureDate) {
+    public String getTrainPrices(Integer origin, Integer destination, LocalDate departureDate) {
         return rzdApiClient.getPrices(origin, destination, departureDate);
     }
 }
