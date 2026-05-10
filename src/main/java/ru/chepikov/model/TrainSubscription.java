@@ -34,6 +34,6 @@ public class TrainSubscription {
     @Column(name = "departure_date")
     private LocalDate departureDate;
 
-    @Column(name = "content_hash")
-    private Integer contentHash;
+    @Column(name = "hashcode")
+    private Integer hashcode;
 }

@@ -19,7 +19,7 @@ public class StationService {
 
     @Cacheable("stations")
     public Station findByName(String station) {
-        return stationRepository.findByStationName(station)
+        return stationRepository.findByName(station)
                 .orElseThrow(() -> new RuntimeException("Станция не найдена: " + station));
     }
 }

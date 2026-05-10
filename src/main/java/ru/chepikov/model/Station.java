@@ -1,5 +1,6 @@
 package ru.chepikov.model;
 
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
@@ -17,7 +18,9 @@ import lombok.Setter;
 public class Station {
 
     @Id
+    @Column(name = "id")
     private Integer id;
 
-    private String stationName;
+    @Column(name = "name")
+    private String name;
 }
