@@ -221,7 +221,7 @@ public class RzdBot extends TelegramLongPollingBot {
 
     private void createPendingSubscription(long chatId, LocalDate date) {
         TrainSubscription sub = new TrainSubscription();
-        sub.setUserId((int) chatId);
+        sub.setUserId(chatId);
         sub.setDepartureDate(date);
         sub.setHashcode(0);
         pendingSubscriptions.put(chatId, sub);

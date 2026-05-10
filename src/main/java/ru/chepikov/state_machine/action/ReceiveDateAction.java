@@ -1,4 +1,4 @@
-package ru.chepikov.action;
+package ru.chepikov.state_machine.action;
 
 import org.springframework.statemachine.StateContext;
 import org.springframework.statemachine.action.Action;

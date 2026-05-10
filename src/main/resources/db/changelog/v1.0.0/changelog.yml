@@ -8,3 +8,6 @@ databaseChangeLog:
   - include:
       file: 03.create_and_fill_car_type_table.sql
       relativeToChangelogFile: true
+  - include:
+      file: 04.alter_table_train_subscription.sql
+      relativeToChangelogFile: true

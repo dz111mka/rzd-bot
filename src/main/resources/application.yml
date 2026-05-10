@@ -13,7 +13,7 @@ spring:
       schema: rzd
       connection-init-sql: CREATE SCHEMA IF NOT EXISTS ${spring.datasource.hikari.schema}
   jpa:
-    show-sql: true
+    show-sql: false
     hibernate:
       ddl-auto: validate
     properties:
