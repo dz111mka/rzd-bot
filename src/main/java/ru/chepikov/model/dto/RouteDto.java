@@ -18,10 +18,13 @@ public class RouteDto {
 
     @JsonProperty("Trains")
     private List<TrainDto> trainList;
+
     @JsonProperty("OriginStationName")
     private String originStationName;
+
     @JsonProperty("DestinationStationName")
     private String destinationStationName;
+
     private LocalDate date;
 
     public String toFormattedString() {

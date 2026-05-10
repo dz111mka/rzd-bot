@@ -17,18 +17,25 @@ public class CarGroupsDto {
 
     @JsonProperty("ServiceClasses")
     private List<String> serviceClasses;
+
     @JsonProperty("CarTypeName")
     private String carTypeName;
+
     @JsonProperty("LowerPlaceQuantity")
     private int lowerPlace;
+
     @JsonProperty("UpperPlaceQuantity")
     private int upperPlace;
+
     @JsonProperty("LowerSidePlaceQuantity")
     private int lowerSidePlace;
+
     @JsonProperty("UpperSidePlaceQuantity")
     private int upperSidePlace;
+
     @JsonProperty("TotalPlaceQuantity")
     private int totalSeat;
+
     @JsonProperty("Carriers")
     private List<String> carriersList;
 
