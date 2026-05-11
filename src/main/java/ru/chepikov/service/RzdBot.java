@@ -21,7 +21,7 @@ import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKe
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 import ru.chepikov.config.BotConfig;
 import ru.chepikov.model.TrainSubscription;
-import ru.chepikov.model.dto.RouteDto;
+import ru.chepikov.model.dto.route.RouteDto;
 import ru.chepikov.state_machine.BotEvents;
 import ru.chepikov.state_machine.BotStates;
 

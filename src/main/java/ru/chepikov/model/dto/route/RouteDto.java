@@ -1,4 +1,4 @@
-package ru.chepikov.model.dto;
+package ru.chepikov.model.dto.route;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
