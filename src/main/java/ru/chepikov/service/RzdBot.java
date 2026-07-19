@@ -230,11 +230,24 @@ public class RzdBot extends TelegramLongPollingBot {
         }
     }
 
+    public void sendHtmlMessage(long chatId, String text) {
+        try {
+            execute(SendMessage.builder()
+                    .chatId(chatId)
+                    .text(text)
+                    .parseMode("HTML")
+                    .disableWebPagePreview(true)
+                    .build());
+        } catch (TelegramApiException e) {
+            log.warn("Не удалось отправить сообщение: {}", e.getMessage());
+        }
+    }
+
     private void sendMessageWithKeyboard(long chatId, String text, InlineKeyboardMarkup keyboard) {
         try {
             execute(SendMessage.builder().chatId(chatId).text(text).replyMarkup(keyboard).build());
         } catch (TelegramApiException e) {
-            log.warn("Не удалось отправить ��ообщение: {}", e.getMessage());
+            log.warn("Не удалось отправить сообщение: {}", e.getMessage());
         }
     }
 

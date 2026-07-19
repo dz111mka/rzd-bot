@@ -11,11 +11,9 @@ import org.springframework.transaction.annotation.Transactional;
 import ru.chepikov.model.Station;
 import ru.chepikov.model.TrainSubscription;
 import ru.chepikov.model.dto.route.RouteDto;
-import ru.chepikov.model.dto.train.TrainDto;
 
 import java.util.List;
 import java.util.Objects;
-import java.util.Optional;
 
 @Slf4j
 @Service
@@ -71,8 +69,8 @@ public class SubscriptionChecker {
     }
 
     private void checkSubscription(TrainSubscription subscription) throws Exception {
-        var origin = stationService.findByName(subscription.getOriginStation());
-        var destination = stationService.findByName(subscription.getDestinationStation());
+        Station origin = stationService.findByName(subscription.getOriginStation());
+        Station destination = stationService.findByName(subscription.getDestinationStation());
 
         String json = trainApiService.getTrainPrices(
                 origin.getId(),
@@ -85,44 +83,18 @@ public class SubscriptionChecker {
 
         int routeHash = route.toString().hashCode();
         if (!Objects.equals(subscription.getHashcode(), routeHash)) {
-            rzdBot.sendMessage(subscription.getUserId(), formatNotification(route, origin, destination));
+            rzdBot.sendHtmlMessage(subscription.getUserId(), formatNotification(route, origin, destination));
             subscription.setHashcode(routeHash);
             subscriptionService.save(subscription);
         }
     }
 
     private String formatNotification(RouteDto route, Station origin, Station destination) {
-        String routeText = route.toString();
-        String linksText = buildLinksText(route, origin, destination);
-
-        if (linksText.isBlank()) {
-            return routeText;
-        }
-
-        return routeText + "\n\nRZD links:\n" + linksText;
-    }
-
-    private String buildLinksText(RouteDto route, Station origin, Station destination) {
-        if (route.getTrainList() == null || route.getTrainList().isEmpty()) {
-            return "";
-        }
-
-        StringBuilder sb = new StringBuilder();
-        for (TrainDto train : route.getTrainList()) {
-            Optional<String> link = rzdTicketLinkService.buildSearchResultsUrl(
+        return route.toFormattedString(train -> rzdTicketLinkService.buildSearchResultsUrl(
                     origin,
                     destination,
                     route.getDate(),
                     train.getTrainNumber()
-            );
-
-            link.ifPresent(value -> sb
-                    .append(train.getTrainNumber() == null ? "Train" : train.getTrainNumber())
-                    .append(": ")
-                    .append(value)
-                    .append("\n"));
-        }
-
-        return sb.toString().trim();
+        ));
     }
 }

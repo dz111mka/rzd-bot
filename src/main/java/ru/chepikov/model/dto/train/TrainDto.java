@@ -10,6 +10,7 @@ import ru.chepikov.model.dto.carrier.CarGroupsDto;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Optional;
 
 @Data
 @AllArgsConstructor
@@ -31,19 +32,28 @@ public class TrainDto {
 
     private static final DateTimeFormatter timeFormatter = DateTimeFormatter.ofPattern("HH:mm");
 
-    public String toFormattedString(int trainNumber) {
+    public String toFormattedString(int trainIndex) {
+        return toFormattedString(trainIndex, Optional.empty());
+    }
+
+    public String toFormattedString(int trainIndex, Optional<String> ticketLink) {
         StringBuilder sb = new StringBuilder();
-        sb.append("──── ПОЕЗД #").append(trainNumber).append(" ────\n")
-                .append("│ 🚆 ").append(this.trainNumber).append("\n")
+        sb.append("──── ПОЕЗД #").append(trainIndex).append(" ────\n")
+                .append("│ 🚆 ").append(trainNumber).append("\n")
                 .append("│ ⏰ Отправление: ").append(departureDateTime.format(timeFormatter)).append("\n")
                 .append("│ ⏰ Прибытие: ").append(arrivalDateTime.format(timeFormatter)).append("\n");
+
+        ticketLink.ifPresent(link -> sb
+                .append("│ 🔗 <a href=\"")
+                .append(link)
+                .append("\">Открыть на РЖД</a>\n"));
 
         if (carGroupsList != null && !carGroupsList.isEmpty()) {
             sb.append("│ \n")
                     .append("│ Доступные вагоны:\n");
 
             for (CarGroupsDto car : carGroupsList) {
-                if (car.getTotalSeat() > 0) { // показываем только вагоны с местами
+                if (car.getTotalSeat() > 0) {
                     sb.append("│   └ ").append(car.toFormattedString()).append("\n");
                 }
             }
@@ -57,6 +67,6 @@ public class TrainDto {
 
     @Override
     public String toString() {
-        return toFormattedString(1); // дефолтный номер поезда
+        return toFormattedString(1);
     }
 }

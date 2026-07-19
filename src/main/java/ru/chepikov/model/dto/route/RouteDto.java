@@ -9,6 +9,8 @@ import ru.chepikov.model.dto.train.TrainDto;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
+import java.util.function.Function;
 
 @Data
 @NoArgsConstructor
@@ -28,6 +30,10 @@ public class RouteDto {
     private LocalDate date;
 
     public String toFormattedString() {
+        return toFormattedString(train -> Optional.empty());
+    }
+
+    public String toFormattedString(Function<TrainDto, Optional<String>> linkResolver) {
         StringBuilder sb = new StringBuilder();
         sb.append("🚂 Поездка: ").append(date).append("\n")
                 .append("📍 Из: ").append(originStationName).append("\n")
@@ -36,7 +42,8 @@ public class RouteDto {
 
         if (trainList != null && !trainList.isEmpty()) {
             for (int i = 0; i < trainList.size(); i++) {
-                sb.append(trainList.get(i).toFormattedString(i + 1));
+                TrainDto train = trainList.get(i);
+                sb.append(train.toFormattedString(i + 1, linkResolver.apply(train)));
                 if (i < trainList.size() - 1) {
                     sb.append("\n─── ✨ ───\n\n");
                 }
