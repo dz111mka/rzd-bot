@@ -16,6 +16,7 @@ import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMa
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 import ru.chepikov.config.BotConfig;
+import ru.chepikov.model.Station;
 import ru.chepikov.model.TrainSubscription;
 import ru.chepikov.state_machine.BotEvents;
 import ru.chepikov.state_machine.BotStates;
@@ -32,16 +33,19 @@ public class RzdBot extends TelegramLongPollingBot {
     private final BotConfig botConfig;
     private final SubscriptionService subscriptionService;
     private final CarTypeService carTypeService;
+    private final StationService stationService;
     private final StateMachineFactory<BotStates, BotEvents> stateMachineFactory;
     private final Map<Long, TrainSubscription> pendingSubscriptions = new ConcurrentHashMap<>();
     private final Map<Long, StateMachine<BotStates, BotEvents>> userStateMachines = new ConcurrentHashMap<>();
 
     public RzdBot(BotConfig botConfig,
                   SubscriptionService subscriptionService, CarTypeService carTypeService, 
+                  StationService stationService,
                   StateMachineFactory<BotStates, BotEvents> stateMachineFactory) {
         this.botConfig = botConfig;
         this.subscriptionService = subscriptionService;
         this.carTypeService = carTypeService;
+        this.stationService = stationService;
         this.stateMachineFactory = stateMachineFactory;
         
         List<BotCommand> commands = List.of(
@@ -88,6 +92,8 @@ public class RzdBot extends TelegramLongPollingBot {
             UUID subscriptionId = UUID.fromString(data.split(":")[1]);
             subscriptionService.deleteById(subscriptionId);
             showSubscriptions(chatId);
+        } else if (data.startsWith("STATION:")) {
+            handleStationChoice(chatId, data);
         }
     }
 
@@ -169,6 +175,11 @@ public class RzdBot extends TelegramLongPollingBot {
             return;
         }
 
+        if (state == BotStates.WAITING_FOR_ORIGIN || state == BotStates.WAITING_FOR_DESTINATION) {
+            handleStationInput(chatId, sm, state, input);
+            return;
+        }
+
         sm.getExtendedState().getVariables().put("message", input);
         
         BotEvents event = getEventForState(state);
@@ -194,6 +205,95 @@ public class RzdBot extends TelegramLongPollingBot {
             if (state == BotStates.WAITING_FOR_DESTINATION && !Boolean.TRUE.equals(error)) {
                 completeSubscription(chatId, sm);
             }
+        }
+    }
+
+    private void handleStationInput(long chatId,
+                                    StateMachine<BotStates, BotEvents> sm,
+                                    BotStates state,
+                                    String input) {
+        List<Station> stations = stationService.searchByName(input, 8);
+
+        if (stations.isEmpty()) {
+            sendMessage(chatId, "Станция не найдена. Попробуйте уточнить название.");
+            return;
+        }
+
+        Optional<Station> exactMatch = stations.stream()
+                .filter(station -> station.getName().equalsIgnoreCase(input.trim()))
+                .findFirst();
+
+        if (exactMatch.isPresent()) {
+            acceptStationInput(chatId, sm, state, exactMatch.get().getName());
+            return;
+        }
+
+        if (stations.size() == 1) {
+            acceptStationInput(chatId, sm, state, stations.get(0).getName());
+            return;
+        }
+
+        showStationOptions(chatId, state, stations);
+    }
+
+    private void showStationOptions(long chatId, BotStates state, List<Station> stations) {
+        InlineKeyboardMarkup keyboard = new InlineKeyboardMarkup();
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        String step = state == BotStates.WAITING_FOR_ORIGIN ? "ORIGIN" : "DESTINATION";
+
+        for (Station station : stations) {
+            InlineKeyboardButton button = InlineKeyboardButton.builder()
+                    .text(station.getName())
+                    .callbackData("STATION:" + step + ":" + station.getId())
+                    .build();
+            rows.add(List.of(button));
+        }
+
+        keyboard.setKeyboard(rows);
+        sendMessageWithKeyboard(chatId, "Выберите станцию:", keyboard);
+    }
+
+    private void handleStationChoice(long chatId, String data) {
+        String[] parts = data.split(":");
+        if (parts.length != 3) {
+            return;
+        }
+
+        StateMachine<BotStates, BotEvents> sm = userStateMachines.get(chatId);
+        if (sm == null) {
+            return;
+        }
+
+        BotStates state = sm.getState().getId();
+        if (("ORIGIN".equals(parts[1]) && state != BotStates.WAITING_FOR_ORIGIN)
+                || ("DESTINATION".equals(parts[1]) && state != BotStates.WAITING_FOR_DESTINATION)) {
+            sendMessage(chatId, "Этот выбор уже неактуален. Продолжите текущий шаг.");
+            return;
+        }
+
+        Station station = stationService.findById(Integer.valueOf(parts[2]));
+        acceptStationInput(chatId, sm, state, station.getName());
+    }
+
+    private void acceptStationInput(long chatId,
+                                    StateMachine<BotStates, BotEvents> sm,
+                                    BotStates state,
+                                    String stationName) {
+        sm.getExtendedState().getVariables().put("message", stationName);
+
+        boolean accepted = sm.sendEvent(getEventForState(state));
+        if (!accepted) {
+            return;
+        }
+
+        String result = sm.getExtendedState().get("result", String.class);
+        Boolean error = sm.getExtendedState().get("error", Boolean.class);
+        if (result != null) {
+            sendMessage(chatId, result);
+        }
+
+        if (state == BotStates.WAITING_FOR_DESTINATION && !Boolean.TRUE.equals(error)) {
+            completeSubscription(chatId, sm);
         }
     }
 
