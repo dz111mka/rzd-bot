@@ -3,9 +3,11 @@ package ru.chepikov.service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.core.task.TaskExecutor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import ru.chepikov.model.Station;
@@ -13,11 +15,16 @@ import ru.chepikov.model.TrainSubscription;
 import ru.chepikov.model.dto.route.RouteDto;
 
 import java.util.List;
+import java.util.ArrayList;
 import java.util.Objects;
+import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 @Slf4j
 @Service
 public class SubscriptionChecker {
+
+    private static final int SUBSCRIPTION_BATCH_SIZE = 100;
 
     private final SubscriptionService subscriptionService;
     private final StationService stationService;
@@ -26,7 +33,8 @@ public class SubscriptionChecker {
     private final RzdBot rzdBot;
     private final RzdTicketLinkService rzdTicketLinkService;
 
-    private final TaskExecutor subscriptionCheckExecutor;
+    private final ThreadPoolTaskExecutor subscriptionCheckExecutor;
+    private final AtomicBoolean checkingInProgress = new AtomicBoolean(false);
 
     public SubscriptionChecker(SubscriptionService subscriptionService,
                                StationService stationService,
@@ -34,7 +42,7 @@ public class SubscriptionChecker {
                                ObjectMapper objectMapper,
                                RzdBot rzdBot,
                                RzdTicketLinkService rzdTicketLinkService,
-                               @Qualifier("subscriptionCheckExecutor") TaskExecutor subscriptionCheckExecutor) {
+                               @Qualifier("subscriptionCheckExecutor") ThreadPoolTaskExecutor subscriptionCheckExecutor) {
         this.subscriptionService = subscriptionService;
         this.stationService = stationService;
         this.trainApiService = trainApiService;
@@ -44,12 +52,28 @@ public class SubscriptionChecker {
         this.subscriptionCheckExecutor = subscriptionCheckExecutor;
     }
 
-    @Scheduled(cron = "*/5 * * * * *")
+    @Scheduled(fixedDelayString = "${rzd.subscription-check.fixed-delay-ms:60000}")
     public void checkAllSubscriptions() {
-        List<TrainSubscription> subscriptions = subscriptionService.findAll();
+        if (!checkingInProgress.compareAndSet(false, true)) {
+            log.debug("Subscription check skipped because previous cycle is still running");
+            return;
+        }
 
-        for (TrainSubscription subscription : subscriptions) {
-            subscriptionCheckExecutor.execute(() -> checkSubscriptionSafely(subscription));
+        try {
+            int pageNumber = 0;
+            Page<TrainSubscription> page;
+
+            do {
+                page = subscriptionService.findPage(PageRequest.of(pageNumber, SUBSCRIPTION_BATCH_SIZE));
+                List<Future<?>> futures = new ArrayList<>();
+                for (TrainSubscription subscription : page.getContent()) {
+                    futures.add(subscriptionCheckExecutor.submit(() -> checkSubscriptionSafely(subscription)));
+                }
+                waitForBatch(futures);
+                pageNumber++;
+            } while (page.hasNext());
+        } finally {
+            checkingInProgress.set(false);
         }
     }
 
@@ -68,6 +92,16 @@ public class SubscriptionChecker {
         }
     }
 
+    private void waitForBatch(List<Future<?>> futures) {
+        for (Future<?> future : futures) {
+            try {
+                future.get();
+            } catch (Exception e) {
+                log.error("Subscription check task failed: {}", e.getMessage(), e);
+            }
+        }
+    }
+
     private void checkSubscription(TrainSubscription subscription) throws Exception {
         Station origin = stationService.findByName(subscription.getOriginStation());
         Station destination = stationService.findByName(subscription.getDestinationStation());
@@ -83,9 +117,11 @@ public class SubscriptionChecker {
 
         int routeHash = route.toString().hashCode();
         if (!Objects.equals(subscription.getHashcode(), routeHash)) {
-            rzdBot.sendHtmlMessage(subscription.getUserId(), formatNotification(route, origin, destination));
-            subscription.setHashcode(routeHash);
-            subscriptionService.save(subscription);
+            if (subscriptionService.updateHashcodeIfCurrent(subscription, routeHash)) {
+                rzdBot.sendHtmlMessage(subscription.getUserId(), formatNotification(route, origin, destination));
+            } else {
+                log.debug("Subscription {} was already updated by another worker", subscription.getId());
+            }
         }
     }
 

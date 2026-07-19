@@ -20,6 +20,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.locks.ReentrantLock;
 
 @Slf4j
 @Service
@@ -36,24 +37,42 @@ public class SubscriptionDialogService {
 
     private final Map<Long, TrainSubscription> pendingSubscriptions = new ConcurrentHashMap<>();
     private final Map<Long, StateMachine<BotStates, BotEvents>> userStateMachines = new ConcurrentHashMap<>();
+    private final Map<Long, ReentrantLock> userLocks = new ConcurrentHashMap<>();
 
     public void start(long chatId, BotMessageSender sender) {
-        String today = LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE);
-        StateMachine<BotStates, BotEvents> sm = stateMachineFactory.getStateMachine();
+        withUserLock(chatId, () -> {
+            String today = LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE);
+            StateMachine<BotStates, BotEvents> sm = stateMachineFactory.getStateMachine();
 
-        resetState(sm, BotStates.WAITING_FOR_DATE);
-        userStateMachines.put(chatId, sm);
+            resetState(sm, BotStates.WAITING_FOR_DATE);
+            userStateMachines.put(chatId, sm);
 
-        sender.sendMessage(chatId, "Введите дату в формате YYYY-MM-DD (например, " + today + "):");
+            sender.sendMessage(chatId, "Введите дату в формате YYYY-MM-DD (например, " + today + "):");
+        });
     }
 
     public void cancel(long chatId, BotMessageSender sender) {
-        userStateMachines.remove(chatId);
-        pendingSubscriptions.remove(chatId);
-        sender.sendMessage(chatId, "Операция отменена.");
+        withUserLock(chatId, () -> {
+            userStateMachines.remove(chatId);
+            pendingSubscriptions.remove(chatId);
+            sender.sendMessage(chatId, "Операция отменена.");
+        });
     }
 
     public void handleUserInput(long chatId, String input, BotMessageSender sender) {
+        withUserLock(chatId, () -> handleUserInputLocked(chatId, input, sender));
+    }
+
+    public boolean handleCallback(long chatId, String data, BotMessageSender sender) {
+        if (!data.startsWith(STATION_CALLBACK_PREFIX)) {
+            return false;
+        }
+
+        withUserLock(chatId, () -> handleStationChoice(chatId, data, sender));
+        return true;
+    }
+
+    private void handleUserInputLocked(long chatId, String input, BotMessageSender sender) {
         StateMachine<BotStates, BotEvents> sm = userStateMachines.get(chatId);
         if (sm == null) {
             return;
@@ -72,31 +91,26 @@ public class SubscriptionDialogService {
 
         sm.getExtendedState().getVariables().put("message", input);
         boolean accepted = sm.sendEvent(getEventForState(state));
-
         if (!accepted) {
             return;
         }
 
         sendActionResult(chatId, sm, sender);
-
-        if (state == BotStates.WAITING_FOR_DATE) {
-            LocalDate date = sm.getExtendedState().get("parsedDate", LocalDate.class);
-            Boolean error = sm.getExtendedState().get("error", Boolean.class);
-            if (date != null && !Boolean.TRUE.equals(error)) {
-                createPendingSubscription(chatId, date);
-            } else if (Boolean.TRUE.equals(error)) {
-                resetState(sm, BotStates.WAITING_FOR_DATE);
-            }
-        }
+        handleDateResult(chatId, sm, state);
     }
 
-    public boolean handleCallback(long chatId, String data, BotMessageSender sender) {
-        if (!data.startsWith(STATION_CALLBACK_PREFIX)) {
-            return false;
+    private void handleDateResult(long chatId, StateMachine<BotStates, BotEvents> sm, BotStates state) {
+        if (state != BotStates.WAITING_FOR_DATE) {
+            return;
         }
 
-        handleStationChoice(chatId, data, sender);
-        return true;
+        LocalDate date = sm.getExtendedState().get("parsedDate", LocalDate.class);
+        Boolean error = sm.getExtendedState().get("error", Boolean.class);
+        if (date != null && !Boolean.TRUE.equals(error)) {
+            createPendingSubscription(chatId, date);
+        } else if (Boolean.TRUE.equals(error)) {
+            resetState(sm, BotStates.WAITING_FOR_DATE);
+        }
     }
 
     private void handleStationInput(long chatId,
@@ -213,7 +227,6 @@ public class SubscriptionDialogService {
 
     private void completeSubscription(long chatId, StateMachine<BotStates, BotEvents> sm) {
         TrainSubscription sub = pendingSubscriptions.get(chatId);
-
         if (sub == null) {
             log.warn("Pending subscription not found for {}", chatId);
             return;
@@ -225,7 +238,9 @@ public class SubscriptionDialogService {
         sub.setOriginStation(origin);
         sub.setDestinationStation(destination);
 
-        subscriptionService.save(sub);
+        if (subscriptionService.saveIfAbsent(sub).isEmpty()) {
+            log.info("Subscription already exists: {}", sub);
+        }
         pendingSubscriptions.remove(chatId);
 
         log.info("Subscription saved: {}", sub);
@@ -237,5 +252,15 @@ public class SubscriptionDialogService {
                 new DefaultStateMachineContext<>(state, null, null, null)
         ));
         sm.start();
+    }
+
+    private void withUserLock(long chatId, Runnable action) {
+        ReentrantLock lock = userLocks.computeIfAbsent(chatId, ignored -> new ReentrantLock());
+        lock.lock();
+        try {
+            action.run();
+        } finally {
+            lock.unlock();
+        }
     }
 }
