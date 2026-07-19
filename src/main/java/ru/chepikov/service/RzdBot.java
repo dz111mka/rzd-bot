@@ -1,9 +1,6 @@
 package ru.chepikov.service;
 
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.statemachine.StateMachine;
-import org.springframework.statemachine.config.StateMachineFactory;
-import org.springframework.statemachine.support.DefaultStateMachineContext;
 import org.springframework.stereotype.Service;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import org.telegram.telegrambots.meta.api.methods.commands.SetMyCommands;
@@ -16,51 +13,31 @@ import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMa
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 import ru.chepikov.config.BotConfig;
-import ru.chepikov.model.Station;
 import ru.chepikov.model.TrainSubscription;
-import ru.chepikov.state_machine.BotEvents;
-import ru.chepikov.state_machine.BotStates;
 
-import java.time.LocalDate;
-import java.time.format.DateTimeFormatter;
-import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.UUID;
 
 @Slf4j
 @Service
-public class RzdBot extends TelegramLongPollingBot {
+public class RzdBot extends TelegramLongPollingBot implements BotMessageSender {
 
     private final BotConfig botConfig;
     private final SubscriptionService subscriptionService;
     private final CarTypeService carTypeService;
-    private final StationService stationService;
-    private final StateMachineFactory<BotStates, BotEvents> stateMachineFactory;
-    private final Map<Long, TrainSubscription> pendingSubscriptions = new ConcurrentHashMap<>();
-    private final Map<Long, StateMachine<BotStates, BotEvents>> userStateMachines = new ConcurrentHashMap<>();
+    private final SubscriptionDialogService subscriptionDialogService;
 
     public RzdBot(BotConfig botConfig,
-                  SubscriptionService subscriptionService, CarTypeService carTypeService, 
-                  StationService stationService,
-                  StateMachineFactory<BotStates, BotEvents> stateMachineFactory) {
+                  SubscriptionService subscriptionService,
+                  CarTypeService carTypeService,
+                  SubscriptionDialogService subscriptionDialogService) {
         this.botConfig = botConfig;
         this.subscriptionService = subscriptionService;
         this.carTypeService = carTypeService;
-        this.stationService = stationService;
-        this.stateMachineFactory = stateMachineFactory;
-        
-        List<BotCommand> commands = List.of(
-            new BotCommand("/start", "Начальное сообщение"),
-            new BotCommand("/subscribe", "Подписаться на маршрут"),
-            new BotCommand("/unsubscribe", "Отписаться от маршрута"),
-            new BotCommand("/car_types", "Информация о типах вагонов"),
-            new BotCommand("/cancel", "Отменить операцию")
-        );
-        
-        try {
-            execute(new SetMyCommands(commands, new BotCommandScopeDefault(), null));
-        } catch (TelegramApiException e) {
-            log.error("Ошибка при настройке команд бота: {}", e.getMessage());
-        }
+        this.subscriptionDialogService = subscriptionDialogService;
+
+        registerCommands();
     }
 
     @Override
@@ -73,14 +50,30 @@ public class RzdBot extends TelegramLongPollingBot {
         }
     }
 
+    private void registerCommands() {
+        List<BotCommand> commands = List.of(
+                new BotCommand("/start", "Начальное сообщение"),
+                new BotCommand("/subscribe", "Подписаться на маршрут"),
+                new BotCommand("/unsubscribe", "Отписаться от маршрута"),
+                new BotCommand("/car_types", "Информация о типах вагонов"),
+                new BotCommand("/cancel", "Отменить операцию")
+        );
+
+        try {
+            execute(new SetMyCommands(commands, new BotCommandScopeDefault(), null));
+        } catch (TelegramApiException e) {
+            log.error("Ошибка при настройке команд бота: {}", e.getMessage());
+        }
+    }
+
     private void handleMessage(String text, long chatId) {
         switch (text) {
             case "/start" -> sendMessage(chatId, "Привет! Я бот для отслеживания билетов РЖД.");
             case "/unsubscribe" -> showSubscriptions(chatId);
             case "/car_types" -> showCarTypes(chatId);
-            case "/subscribe" -> startSubscription(chatId);
-            case "/cancel" -> cancelSubscription(chatId);
-            default -> handleUserInput(chatId, text);
+            case "/subscribe" -> subscriptionDialogService.start(chatId, this);
+            case "/cancel" -> subscriptionDialogService.cancel(chatId, this);
+            default -> subscriptionDialogService.handleUserInput(chatId, text, this);
         }
     }
 
@@ -88,45 +81,15 @@ public class RzdBot extends TelegramLongPollingBot {
         String data = callback.getData();
         long chatId = callback.getMessage().getChatId();
 
+        if (subscriptionDialogService.handleCallback(chatId, data, this)) {
+            return;
+        }
+
         if (data.startsWith("REMOVE_SUB:")) {
             UUID subscriptionId = UUID.fromString(data.split(":")[1]);
             subscriptionService.deleteById(subscriptionId);
             showSubscriptions(chatId);
-        } else if (data.startsWith("STATION:")) {
-            handleStationChoice(chatId, data);
         }
-    }
-
-    private void startSubscription(long chatId) {
-        String today = LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE);
-
-        StateMachine<BotStates, BotEvents> sm = stateMachineFactory.getStateMachine();
-
-        sm.stop();
-
-        sm.getStateMachineAccessor().doWithAllRegions(accessor -> {
-            accessor.resetStateMachine(
-                    new DefaultStateMachineContext<>(
-                            BotStates.WAITING_FOR_DATE,
-                            null,
-                            null,
-                            null
-                    )
-            );
-        });
-
-        sm.start();
-
-        userStateMachines.put(chatId, sm);
-
-        sendMessage(chatId,
-                "Введите дату в формате YYYY-MM-DD (например, " + today + "):");
-    }
-
-    private void cancelSubscription(long chatId) {
-        userStateMachines.remove(chatId);
-        pendingSubscriptions.remove(chatId);
-        sendMessage(chatId, "Операция отменена.");
     }
 
     private void showCarTypes(long chatId) {
@@ -135,7 +98,7 @@ public class RzdBot extends TelegramLongPollingBot {
 
     private void showSubscriptions(long chatId) {
         List<TrainSubscription> subscriptions = subscriptionService.findByUserId(chatId);
-        
+
         if (subscriptions.isEmpty()) {
             sendMessage(chatId, "У вас нет активных подписок.");
             return;
@@ -146,9 +109,9 @@ public class RzdBot extends TelegramLongPollingBot {
 
         for (TrainSubscription sub : subscriptions) {
             InlineKeyboardButton button = InlineKeyboardButton.builder()
-                .text(subInlineLabel(sub))
-                .callbackData("REMOVE_SUB:" + sub.getId())
-                .build();
+                    .text(subInlineLabel(sub))
+                    .callbackData("REMOVE_SUB:" + sub.getId())
+                    .build();
             rows.add(List.of(button));
         }
         keyboard.setKeyboard(rows);
@@ -157,171 +120,14 @@ public class RzdBot extends TelegramLongPollingBot {
     }
 
     private String subInlineLabel(TrainSubscription sub) {
-        return "Удалить %s | %s → %s".formatted(
-            sub.getDepartureDate(),
-            sub.getOriginStation(),
-            sub.getDestinationStation()
+        return "Удалить %s | %s -> %s".formatted(
+                sub.getDepartureDate(),
+                sub.getOriginStation(),
+                sub.getDestinationStation()
         );
     }
 
-    private void handleUserInput(long chatId, String input) {
-        StateMachine<BotStates, BotEvents> sm = userStateMachines.get(chatId);
-        if (sm == null) return;
-
-        BotStates state = sm.getState().getId();
-
-        if (state == BotStates.START) {
-            sendMessage(chatId, "Нажмите /subscribe для начала.");
-            return;
-        }
-
-        if (state == BotStates.WAITING_FOR_ORIGIN || state == BotStates.WAITING_FOR_DESTINATION) {
-            handleStationInput(chatId, sm, state, input);
-            return;
-        }
-
-        sm.getExtendedState().getVariables().put("message", input);
-        
-        BotEvents event = getEventForState(state);
-        boolean accepted = sm.sendEvent(event);
-        
-        if (accepted) {
-            String result = sm.getExtendedState().get("result", String.class);
-            Boolean error = sm.getExtendedState().get("error", Boolean.class);
-
-            if (result != null) {
-                sendMessage(chatId, result);
-            }
-            
-            if (state == BotStates.WAITING_FOR_DATE) {
-                LocalDate date = sm.getExtendedState().get("parsedDate", LocalDate.class);
-                if (date != null && !Boolean.TRUE.equals(error)) {
-                    createPendingSubscription(chatId, date);
-                } else if (Boolean.TRUE.equals(error)) {
-                    resetState(sm, BotStates.WAITING_FOR_DATE);
-                }
-            }
-
-            if (state == BotStates.WAITING_FOR_DESTINATION && !Boolean.TRUE.equals(error)) {
-                completeSubscription(chatId, sm);
-            }
-        }
-    }
-
-    private void handleStationInput(long chatId,
-                                    StateMachine<BotStates, BotEvents> sm,
-                                    BotStates state,
-                                    String input) {
-        List<Station> stations = stationService.searchByName(input, 8);
-
-        if (stations.isEmpty()) {
-            sendMessage(chatId, "Станция не найдена. Попробуйте уточнить название.");
-            return;
-        }
-
-        Optional<Station> exactMatch = stations.stream()
-                .filter(station -> station.getName().equalsIgnoreCase(input.trim()))
-                .findFirst();
-
-        if (exactMatch.isPresent()) {
-            acceptStationInput(chatId, sm, state, exactMatch.get().getName());
-            return;
-        }
-
-        if (stations.size() == 1) {
-            acceptStationInput(chatId, sm, state, stations.get(0).getName());
-            return;
-        }
-
-        showStationOptions(chatId, state, stations);
-    }
-
-    private void showStationOptions(long chatId, BotStates state, List<Station> stations) {
-        InlineKeyboardMarkup keyboard = new InlineKeyboardMarkup();
-        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
-        String step = state == BotStates.WAITING_FOR_ORIGIN ? "ORIGIN" : "DESTINATION";
-
-        for (Station station : stations) {
-            InlineKeyboardButton button = InlineKeyboardButton.builder()
-                    .text(station.getName())
-                    .callbackData("STATION:" + step + ":" + station.getId())
-                    .build();
-            rows.add(List.of(button));
-        }
-
-        keyboard.setKeyboard(rows);
-        sendMessageWithKeyboard(chatId, "Выберите станцию:", keyboard);
-    }
-
-    private void handleStationChoice(long chatId, String data) {
-        String[] parts = data.split(":");
-        if (parts.length != 3) {
-            return;
-        }
-
-        StateMachine<BotStates, BotEvents> sm = userStateMachines.get(chatId);
-        if (sm == null) {
-            return;
-        }
-
-        BotStates state = sm.getState().getId();
-        if (("ORIGIN".equals(parts[1]) && state != BotStates.WAITING_FOR_ORIGIN)
-                || ("DESTINATION".equals(parts[1]) && state != BotStates.WAITING_FOR_DESTINATION)) {
-            sendMessage(chatId, "Этот выбор уже неактуален. Продолжите текущий шаг.");
-            return;
-        }
-
-        Station station = stationService.findById(Integer.valueOf(parts[2]));
-        acceptStationInput(chatId, sm, state, station.getName());
-    }
-
-    private void acceptStationInput(long chatId,
-                                    StateMachine<BotStates, BotEvents> sm,
-                                    BotStates state,
-                                    String stationName) {
-        sm.getExtendedState().getVariables().put("message", stationName);
-
-        boolean accepted = sm.sendEvent(getEventForState(state));
-        if (!accepted) {
-            return;
-        }
-
-        String result = sm.getExtendedState().get("result", String.class);
-        Boolean error = sm.getExtendedState().get("error", Boolean.class);
-        if (result != null) {
-            sendMessage(chatId, result);
-        }
-
-        if (state == BotStates.WAITING_FOR_DESTINATION && !Boolean.TRUE.equals(error)) {
-            completeSubscription(chatId, sm);
-        }
-    }
-
-    private BotEvents getEventForState(BotStates state) {
-        return switch (state) {
-            case WAITING_FOR_DATE -> BotEvents.RECEIVE_DATE;
-            case WAITING_FOR_ORIGIN -> BotEvents.RECEIVE_ORIGIN;
-            case WAITING_FOR_DESTINATION -> BotEvents.RECEIVE_DESTINATION;
-            default -> null;
-        };
-    }
-
-    private void createPendingSubscription(long chatId, LocalDate date) {
-        TrainSubscription sub = new TrainSubscription();
-        sub.setUserId(chatId);
-        sub.setDepartureDate(date);
-        sub.setHashcode(0);
-        pendingSubscriptions.put(chatId, sub);
-    }
-
-    private void resetState(StateMachine<BotStates, BotEvents> sm, BotStates state) {
-        sm.stop();
-        sm.getStateMachineAccessor().doWithAllRegions(accessor -> accessor.resetStateMachine(
-                new DefaultStateMachineContext<>(state, null, null, null)
-        ));
-        sm.start();
-    }
-
+    @Override
     public void sendMessage(long chatId, String text) {
         try {
             execute(SendMessage.builder().chatId(chatId).text(text).build());
@@ -330,6 +136,7 @@ public class RzdBot extends TelegramLongPollingBot {
         }
     }
 
+    @Override
     public void sendHtmlMessage(long chatId, String text) {
         try {
             execute(SendMessage.builder()
@@ -343,38 +150,13 @@ public class RzdBot extends TelegramLongPollingBot {
         }
     }
 
-    private void sendMessageWithKeyboard(long chatId, String text, InlineKeyboardMarkup keyboard) {
+    @Override
+    public void sendMessageWithKeyboard(long chatId, String text, InlineKeyboardMarkup keyboard) {
         try {
             execute(SendMessage.builder().chatId(chatId).text(text).replyMarkup(keyboard).build());
         } catch (TelegramApiException e) {
             log.warn("Не удалось отправить сообщение: {}", e.getMessage());
         }
-    }
-
-    private void completeSubscription(long chatId,
-                                      StateMachine<BotStates, BotEvents> sm) {
-
-        TrainSubscription sub = pendingSubscriptions.get(chatId);
-
-        if (sub == null) {
-            log.warn("Pending subscription not found for {}", chatId);
-            return;
-        }
-
-        String origin = sm.getExtendedState()
-                .get("originStation", String.class);
-
-        String destination = sm.getExtendedState()
-                .get("destinationStation", String.class);
-
-        sub.setOriginStation(origin);
-        sub.setDestinationStation(destination);
-
-        subscriptionService.save(sub);
-
-        pendingSubscriptions.remove(chatId);
-
-        log.info("Subscription saved: {}", sub);
     }
 
     @Override
