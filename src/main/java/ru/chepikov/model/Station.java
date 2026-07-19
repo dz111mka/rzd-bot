@@ -23,4 +23,7 @@ public class Station {
 
     @Column(name = "name")
     private String name;
+
+    @Column(name = "frontend_id")
+    private String frontendId;
 }

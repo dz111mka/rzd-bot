@@ -8,11 +8,14 @@ import org.springframework.scheduling.annotation.Async;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import ru.chepikov.model.Station;
 import ru.chepikov.model.TrainSubscription;
 import ru.chepikov.model.dto.route.RouteDto;
+import ru.chepikov.model.dto.train.TrainDto;
 
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 
 @Slf4j
 @Service
@@ -23,6 +26,7 @@ public class SubscriptionChecker {
     private final TrainApiService trainApiService;
     private final ObjectMapper objectMapper;
     private final RzdBot rzdBot;
+    private final RzdTicketLinkService rzdTicketLinkService;
 
     private final TaskExecutor subscriptionCheckExecutor;
 
@@ -31,12 +35,14 @@ public class SubscriptionChecker {
                                TrainApiService trainApiService,
                                ObjectMapper objectMapper,
                                RzdBot rzdBot,
+                               RzdTicketLinkService rzdTicketLinkService,
                                @Qualifier("subscriptionCheckExecutor") TaskExecutor subscriptionCheckExecutor) {
         this.subscriptionService = subscriptionService;
         this.stationService = stationService;
         this.trainApiService = trainApiService;
         this.objectMapper = objectMapper;
         this.rzdBot = rzdBot;
+        this.rzdTicketLinkService = rzdTicketLinkService;
         this.subscriptionCheckExecutor = subscriptionCheckExecutor;
     }
 
@@ -79,9 +85,44 @@ public class SubscriptionChecker {
 
         int routeHash = route.toString().hashCode();
         if (!Objects.equals(subscription.getHashcode(), routeHash)) {
-            rzdBot.sendMessage(subscription.getUserId(), route.toString());
+            rzdBot.sendMessage(subscription.getUserId(), formatNotification(route, origin, destination));
             subscription.setHashcode(routeHash);
             subscriptionService.save(subscription);
         }
+    }
+
+    private String formatNotification(RouteDto route, Station origin, Station destination) {
+        String routeText = route.toString();
+        String linksText = buildLinksText(route, origin, destination);
+
+        if (linksText.isBlank()) {
+            return routeText;
+        }
+
+        return routeText + "\n\nRZD links:\n" + linksText;
+    }
+
+    private String buildLinksText(RouteDto route, Station origin, Station destination) {
+        if (route.getTrainList() == null || route.getTrainList().isEmpty()) {
+            return "";
+        }
+
+        StringBuilder sb = new StringBuilder();
+        for (TrainDto train : route.getTrainList()) {
+            Optional<String> link = rzdTicketLinkService.buildSearchResultsUrl(
+                    origin,
+                    destination,
+                    route.getDate(),
+                    train.getTrainNumber()
+            );
+
+            link.ifPresent(value -> sb
+                    .append(train.getTrainNumber() == null ? "Train" : train.getTrainNumber())
+                    .append(": ")
+                    .append(value)
+                    .append("\n"));
+        }
+
+        return sb.toString().trim();
     }
 }
