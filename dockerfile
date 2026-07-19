@@ -1,24 +1,21 @@
-FROM eclipse-temurin:21-jdk-jammy
+FROM gradle:8.10-jdk21 AS build
 
-COPY ./build/libs/rzdbot-1.0.0.jar ./rzdbot-1.0.0.jar
+WORKDIR /workspace
+
+COPY settings.gradle build.gradle ./
+COPY gradle ./gradle
+COPY gradlew gradlew.bat ./
+COPY src ./src
+
+RUN gradle bootJar --no-daemon
+
+FROM eclipse-temurin:21-jre-jammy
+
+WORKDIR /app
 
 ENV SPRING_PROFILES_ACTIVE=docker
 ENV TZ=Europe/Moscow
 
-EXPOSE 8080
-EXPOSE 9010
+COPY --from=build /workspace/build/libs/rzdbot-1.0.0.jar ./app.jar
 
-ENTRYPOINT ["java", \
-    "-Dcom.sun.management.jmxremote=true", \
-    "-Dcom.sun.management.jmxremote.port=9010", \
-    "-Dcom.sun.management.jmxremote.local.only=false", \
-    "-Dcom.sun.management.jmxremote.authenticate=false", \
-    "-Dcom.sun.management.jmxremote.ssl=false", \
-    "-Dcom.sun.management.jmxremote.rmi.port=9010", \
-    "-Djava.rmi.server.hostname=localhost", \
-    "-XX:+HeapDumpOnOutOfMemoryError", \
-    "-XX:MinRAMPercentage=40", \
-    "-XX:MaxRAMPercentage=40", \
-    "-noverify", \
-    "-jar", \
-    "./rzdbot-1.0.0.jar"]
+ENTRYPOINT ["java", "-XX:+HeapDumpOnOutOfMemoryError", "-XX:MinRAMPercentage=40", "-XX:MaxRAMPercentage=40", "-jar", "./app.jar"]

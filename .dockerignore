@@ -1,0 +1,14 @@
+.git
+.gradle
+.idea
+.settings
+build
+bin
+out
+*.iml
+.classpath
+.factorypath
+.project
+.env
+result.png
+rzd-state.json
