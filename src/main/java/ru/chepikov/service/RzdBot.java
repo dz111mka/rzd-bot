@@ -1,14 +1,10 @@
 package ru.chepikov.service;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.scheduling.annotation.Async;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.statemachine.StateMachine;
 import org.springframework.statemachine.config.StateMachineFactory;
 import org.springframework.statemachine.support.DefaultStateMachineContext;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import org.telegram.telegrambots.meta.api.methods.commands.SetMyCommands;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
@@ -21,7 +17,6 @@ import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKe
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 import ru.chepikov.config.BotConfig;
 import ru.chepikov.model.TrainSubscription;
-import ru.chepikov.model.dto.route.RouteDto;
 import ru.chepikov.state_machine.BotEvents;
 import ru.chepikov.state_machine.BotStates;
 
@@ -29,34 +24,24 @@ import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 
 @Slf4j
 @Service
 public class RzdBot extends TelegramLongPollingBot {
 
     private final BotConfig botConfig;
-    private final TrainApiService trainApiService;
-    private final StationService stationService;
     private final SubscriptionService subscriptionService;
     private final CarTypeService carTypeService;
-    private final ObjectMapper objectMapper;
     private final StateMachineFactory<BotStates, BotEvents> stateMachineFactory;
-    private final ExecutorService executorService = Executors.newFixedThreadPool(4);
-
     private final Map<Long, TrainSubscription> pendingSubscriptions = new ConcurrentHashMap<>();
     private final Map<Long, StateMachine<BotStates, BotEvents>> userStateMachines = new ConcurrentHashMap<>();
 
-    public RzdBot(BotConfig botConfig, TrainApiService trainApiService, StationService stationService,
+    public RzdBot(BotConfig botConfig,
                   SubscriptionService subscriptionService, CarTypeService carTypeService, 
-                  ObjectMapper objectMapper, StateMachineFactory<BotStates, BotEvents> stateMachineFactory) {
+                  StateMachineFactory<BotStates, BotEvents> stateMachineFactory) {
         this.botConfig = botConfig;
-        this.trainApiService = trainApiService;
-        this.stationService = stationService;
         this.subscriptionService = subscriptionService;
         this.carTypeService = carTypeService;
-        this.objectMapper = objectMapper;
         this.stateMachineFactory = stateMachineFactory;
         
         List<BotCommand> commands = List.of(
@@ -201,6 +186,8 @@ public class RzdBot extends TelegramLongPollingBot {
                 LocalDate date = sm.getExtendedState().get("parsedDate", LocalDate.class);
                 if (date != null && !Boolean.TRUE.equals(error)) {
                     createPendingSubscription(chatId, date);
+                } else if (Boolean.TRUE.equals(error)) {
+                    resetState(sm, BotStates.WAITING_FOR_DATE);
                 }
             }
 
@@ -227,51 +214,15 @@ public class RzdBot extends TelegramLongPollingBot {
         pendingSubscriptions.put(chatId, sub);
     }
 
-    @Async("scheduledChecking")
-    @Scheduled(cron = "*/5 * * * * *")
-    public void checkAllSubscriptions() {
-        List<TrainSubscription> subscriptions = subscriptionService.findAll();
-        
-        for (TrainSubscription sub : subscriptions) {
-            executorService.submit(() -> {
-                try {
-                    checkSubscription(sub);
-                } catch (Exception e) {
-                    log.error("Ошибка проверки подписки {}: {}", sub.getId(), e.getMessage());
-                }
-            });
-        }
+    private void resetState(StateMachine<BotStates, BotEvents> sm, BotStates state) {
+        sm.stop();
+        sm.getStateMachineAccessor().doWithAllRegions(accessor -> accessor.resetStateMachine(
+                new DefaultStateMachineContext<>(state, null, null, null)
+        ));
+        sm.start();
     }
 
-    private void checkSubscription(TrainSubscription sub) throws Exception {
-        var origin = stationService.findByName(sub.getOriginStation());
-        var destination = stationService.findByName(sub.getDestinationStation());
-
-        if (origin == null || destination == null) {
-            log.warn("Станция не найдена для подписки {}", sub.getId());
-            return;
-        }
-
-        String json = trainApiService.getTrainPrices(origin.getId(), destination.getId(), sub.getDepartureDate());
-        RouteDto route = objectMapper.readValue(json, RouteDto.class);
-        route.setDate(sub.getDepartureDate());
-
-        int routeHash = route.toString().hashCode();
-        if (!Objects.equals(sub.getHashcode(), routeHash)) {
-            sendMessage(sub.getUserId(), route.toString());
-            sub.setHashcode(routeHash);
-            subscriptionService.save(sub);
-        }
-    }
-
-    @Async("scheduledDeleting")
-    @Transactional
-    @Scheduled(cron = "0 0 2 * * ?")
-    public void cleanupExpiredSubscriptions() {
-        subscriptionService.deleteExpiredData();
-    }
-
-    private void sendMessage(long chatId, String text) {
+    public void sendMessage(long chatId, String text) {
         try {
             execute(SendMessage.builder().chatId(chatId).text(text).build());
         } catch (TelegramApiException e) {

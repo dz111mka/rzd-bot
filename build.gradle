@@ -42,7 +42,7 @@ dependencies {
 
 	implementation 'org.springframework.cloud:spring-cloud-starter-openfeign:4.2.0'
 
-	implementation 'org.postgresql:postgresql:42.7.4'
+	implementation 'org.postgresql:postgresql:42.7.7'
 	implementation 'org.liquibase:liquibase-core'
 
 	implementation 'org.telegram:telegrambots:6.9.7.1'
@@ -53,6 +53,7 @@ dependencies {
 	implementation 'org.springframework.statemachine:spring-statemachine-starter:3.2.0'
 
 	implementation 'me.paulschwarz:spring-dotenv:4.0.0'
+
 }
 
 tasks.named('test') {
